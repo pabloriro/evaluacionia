@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evaluador IA para Docentes Chile</title>
+    <!-- Carga de Tailwind CSS para estilos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+        }
+        .card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .loading {
+            border-top-color: #3b82f6;
+            -webkit-animation: spinner 1s linear infinite;
+            animation: spinner 1s linear infinite;
+        }
+        @keyframes spinner {
+            to {transform: rotate(360deg);}
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <!-- Encabezado y Título -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-red-700 mb-2">Creador y Analizador de Clases (CPEIP)</h1>
+            <p class="text-gray-600">Asistente IA para la Evaluación Docente en Chile (Portafolio 2025)</p>
+        </header>
+
+        <!-- Selector de Tarea -->
+        <div class="card bg-white p-6 rounded-lg mb-8">
+            <label for="taskSelector" class="block text-lg font-semibold text-gray-700 mb-3">
+                Selecciona el elemento del Portafolio a evaluar:
+            </label>
+            <select id="taskSelector" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+                <option value="objetivo_clase">Objetivo de Clase (Tarea 1.A)</option>
+                <option value="fundamentacion_planificacion">Fundamentación de Planificación (Tarea 1.B)</option>
+                <option value="analisis_monitoreo">Análisis y Uso Formativo de la Evaluación (Tarea 2.B)</option>
+                <option value="reflexion_socioemocional">Reflexión Socioemocional (Tarea 3)</option>
+            </select>
+        </div>
+
+        <!-- Área de Ingreso de Texto -->
+        <div class="card bg-white p-6 rounded-lg mb-8">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Ingresa tu texto</h2>
+            <textarea id="userInput" rows="8" placeholder="Escribe aquí tu Objetivo, Fundamentación, Análisis o Reflexión..."
+                      class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out"></textarea>
+
+            <button id="evaluateButton"
+                    class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out flex items-center justify-center disabled:opacity-50">
+                <span id="buttonText">Evaluar y Obtener Mejora Destacada</span>
+                <div id="loadingSpinner" class="hidden w-5 h-5 border-2 border-white border-solid rounded-full loading ml-3"></div>
+            </button>
+        </div>
+
+        <!-- Área de Resultados -->
+        <div id="resultsContainer" class="card bg-white p-6 rounded-lg hidden">
+            <h2 class="text-2xl font-bold text-blue-600 border-b pb-2 mb-4">Análisis de la IA</h2>
+            
+            <div class="mb-6 border-l-4 border-yellow-500 pl-4 py-2 bg-yellow-50 rounded-lg">
+                <h3 class="text-xl font-semibold text-yellow-700 mb-2">Tu Texto Sometido a Análisis</h3>
+                <p id="originalText" class="text-gray-800 italic break-words"></p>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Evaluación según Rúbrica (Nivel Actual)</h3>
+                <div id="evaluationScore" class="flex items-center space-x-2 text-lg">
+                    <span id="scoreText" class="font-bold text-red-500"></span>
+                </div>
+                <p id="currentCritique" class="text-gray-600 mt-2 whitespace-pre-line"></p>
+            </div>
+
+            <div class="mb-6 border-t pt-4">
+                <h3 class="text-xl font-semibold text-blue-600 mb-2">Recomendaciones para Nivel DESTACADO</h3>
+                <p id="improvementTips" class="text-gray-600 mt-2 whitespace-pre-line"></p>
+            </div>
+
+            <div class="border-t pt-4 border-l-4 border-green-500 pl-4 py-2 bg-green-50 rounded-lg">
+                <h3 class="text-xl font-semibold text-green-700 mb-2">Propuesta de Texto Mejorado (Nivel Destacado)</h3>
+                <p id="revisedText" class="text-gray-800 font-medium whitespace-pre-line"></p>
+            </div>
+        </div>
+
+        <!-- Mensajes de Error -->
+        <div id="errorContainer" class="card bg-red-100 border-l-4 border-red-500 text-red-700 p-4 hidden mt-8 rounded-lg">
+            <p id="errorMessage" class="font-medium"></p>
+        </div>
+        
+    </div>
+
+    <script>
+        // Configuración de la API Key (Debe permanecer vacía para el entorno Canvas)
+        const apiKey = ""; 
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+        const taskPrompts = {
+            objetivo_clase: {
+                system: "Eres un experto en currículum chileno y en la rúbrica de la Tarea 1.A (Objetivo de Clase) del Portafolio Docente 2025. Analiza el objetivo del docente. Califica en una línea si es INSUFICIENTE, BÁSICO, COMPETENTE o DESTACADO. Luego, según el nivel DESTACADO (integrar conocimientos, habilidades y actitudes), ofrece una crítica de mejora. Finalmente, propone una redacción mejorada. Formato de salida: [Nivel: ...]\n[Critica: ...]\n[Mejora: ...]",
+                user: (text) => `Evalúa y mejora el siguiente objetivo de clase, basándote en la rúbrica de Formulación de Objetivos de Aprendizaje (Nivel DESTACADO: Integrar conocimientos, habilidades y actitudes): "${text}"`
+            },
+            fundamentacion_planificacion: {
+                system: "Eres un experto en el Marco para la Buena Enseñanza (MBE 2021) y en la rúbrica de la Tarea 1.B (Fundamentación de la Planificación) del Portafolio Docente 2025. Analiza la fundamentación del docente. Califica en una línea si es INSUFICIENTE, BÁSICO, COMPETENTE o DESTACADO. Luego, según el nivel DESTACADO (reflexionar sobre la propia práctica en relación con el enfoque inclusivo y promover el respeto/valoración de la diversidad), ofrece una crítica de mejora. Finalmente, propone una redacción mejorada. Formato de salida: [Nivel: ...]\n[Critica: ...]\n[Mejora: ...]",
+                user: (text) => `Evalúa y mejora la siguiente fundamentación de planificación, enfocándote en la reflexión sobre el enfoque inclusivo y la promoción de la valoración de la diversidad (MBE Estándar 6 Descriptor 6.4): "${text}"`
+            },
+            analisis_monitoreo: {
+                system: "Eres un experto en el ciclo de Evaluación Formativa y en la rúbrica de la Tarea 2.B (Análisis y Uso Formativo de la Evaluación) del Portafolio Docente 2025. Analiza el texto. Califica en una línea si es INSUFICIENTE, BÁSICO, COMPETENTE o DESTACADO. Luego, según el nivel DESTACADO (explicar resultados por causas de distinta naturaleza y hacerse cargo de quienes lograron y no lograron), ofrece una crítica de mejora. Finalmente, propone una redacción mejorada. Formato de salida: [Nivel: ...]\n[Critica: ...]\n[Mejora: ...]",
+                user: (text) => `Evalúa y mejora este análisis de resultados del monitoreo, asegurando que se cumplan los criterios para Nivel DESTACADO (causas de distinta naturaleza, hacerse cargo de todos los estudiantes): "${text}"`
+            },
+            reflexion_socioemocional: {
+                system: "Eres un experto en la rúbrica de la Tarea 3 (Reflexión Socioemocional) del Portafolio Docente 2025. Analiza la reflexión del docente. Califica en una línea si es INSUFICIENTE, BÁSICO, COMPETENTE o DESTACADO. Luego, según el nivel DESTACADO (relacionar distintos factores y plantear hipótesis sobre el pensamiento/sentimiento de los estudiantes), ofrece una crítica de mejora. Finalmente, propone una redacción mejorada. Formato de salida: [Nivel: ...]\n[Critica: ...]\n[Mejora: ...]",
+                user: (text) => `Evalúa y mejora esta reflexión sobre el desarrollo socioemocional, buscando el nivel DESTACADO (relacionar factores, plantear hipótesis sobre lo que piensan y sienten los estudiantes): "${text}"`
+            }
+        };
+
+        async function fetchEvaluation(task, input) {
+            const promptConfig = taskPrompts[task];
+            const userQuery = promptConfig.user(input);
+            const systemPrompt = promptConfig.system;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            let response;
+            try {
+                // Implementación de reintento con retroceso exponencial
+                for (let i = 0; i < 3; i++) {
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (response.ok) break;
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (2 ** i))); // Espera 1s, 2s, 4s
+                }
+
+                if (!response || !response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Error en la API: ${response.status} - ${errorText}`);
+                }
+
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!text) {
+                    throw new Error("La respuesta de la IA no contiene el texto esperado.");
+                }
+
+                return parseResponse(text);
+
+            } catch (error) {
+                console.error("Fallo al obtener la evaluación:", error);
+                showError("No se pudo obtener la evaluación. Inténtalo de nuevo o verifica el texto de entrada. Detalle: " + error.message);
+                return null;
+            }
+        }
+
+        function parseResponse(responseText) {
+            const lines = responseText.split('\n');
+            let nivel = '', critica = '', mejora = '';
+
+            for (const line of lines) {
+                if (line.startsWith('[Nivel:')) {
+                    nivel = line.replace('[Nivel: ', '').replace(']', '').trim();
+                } else if (line.startsWith('[Critica:')) {
+                    critica = line.replace('[Critica: ', '').replace(']', '').trim();
+                } else if (line.startsWith('[Mejora:')) {
+                    mejora = line.replace('[Mejora: ', '').replace(']', '').trim();
+                }
+            }
+            return { nivel, critica, mejora };
+        }
+
+        function showLoading(show) {
+            const button = document.getElementById('evaluateButton');
+            const buttonText = document.getElementById('buttonText');
+            const spinner = document.getElementById('loadingSpinner');
+
+            button.disabled = show;
+            spinner.classList.toggle('hidden', !show);
+            buttonText.textContent = show ? 'Evaluando...' : 'Evaluar y Obtener Mejora Destacada';
+        }
+
+        function showError(message) {
+            document.getElementById('errorContainer').classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('resultsContainer').classList.add('hidden');
+        }
+
+        function clearError() {
+            document.getElementById('errorContainer').classList.add('hidden');
+            document.getElementById('errorMessage').textContent = '';
+        }
+
+        function updateResults(data, originalInput) {
+            document.getElementById('originalText').textContent = originalInput;
+            document.getElementById('scoreText').textContent = data.nivel;
+            document.getElementById('currentCritique').textContent = data.critica;
+            document.getElementById('improvementTips').textContent = taskPrompts[document.getElementById('taskSelector').value].user(data.critica); // Usar el prompt para generar tips
+            document.getElementById('revisedText').textContent = data.mejora;
+
+            // Actualizar color del score
+            const scoreElement = document.getElementById('scoreText');
+            scoreElement.classList.remove('text-red-500', 'text-orange-500', 'text-yellow-500', 'text-green-500');
+            switch (data.nivel.toUpperCase()) {
+                case 'INSATISFACTORIO':
+                    scoreElement.classList.add('text-red-500');
+                    break;
+                case 'BÁSICO':
+                    scoreElement.classList.add('text-orange-500');
+                    break;
+                case 'COMPETENTE':
+                    scoreElement.classList.add('text-yellow-500');
+                    break;
+                case 'DESTACADO':
+                    scoreElement.classList.add('text-green-500');
+                    break;
+                default:
+                    scoreElement.classList.add('text-gray-500');
+            }
+
+            document.getElementById('resultsContainer').classList.remove('hidden');
+            document.getElementById('resultsContainer').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        document.getElementById('evaluateButton').addEventListener('click', async () => {
+            clearError();
+            const userInput = document.getElementById('userInput').value.trim();
+            const selectedTask = document.getElementById('taskSelector').value;
+
+            if (userInput.length < 20) {
+                showError("Por favor, ingresa un texto de al menos 20 caracteres para una evaluación significativa.");
+                return;
+            }
+
+            showLoading(true);
+            const evaluationData = await fetchEvaluation(selectedTask, userInput);
+            showLoading(false);
+
+            if (evaluationData) {
+                updateResults(evaluationData, userInput);
+            }
+        });
+
+        // Asegurar que al cambiar de selector se borren los resultados y se actualice el placeholder si es necesario
+        document.getElementById('taskSelector').addEventListener('change', () => {
+            document.getElementById('resultsContainer').classList.add('hidden');
+            clearError();
+            const selectedTask = document.getElementById('taskSelector').value;
+            const textarea = document.getElementById('userInput');
+            
+            let placeholderText = "Escribe aquí tu Objetivo, Fundamentación, Análisis o Reflexión...";
+            
+            switch(selectedTask) {
+                case 'objetivo_clase':
+                    placeholderText = "Ej: Que los alumnos identifiquen las características del soneto.";
+                    break;
+                case 'fundamentacion_planificacion':
+                    placeholderText = "Ej: Diseño un debate para atender a la diversidad de ritmos de aprendizaje. Se fomenta la participación de todos.";
+                    break;
+                case 'analisis_monitoreo':
+                    placeholderText = "Ej: Solo 5 de 30 estudiantes lograron el objetivo de la clase. La causa es que no expliqué bien la tarea. La próxima clase haré un repaso.";
+                    break;
+                case 'reflexion_socioemocional':
+                    placeholderText = "Ej: Noté que un estudiante se aislaba. Necesita desarrollar la empatía. Voy a hablar con él de forma individual y ser más amable.";
+                    break;
+            }
+            textarea.placeholder = placeholderText;
+        });
+
+    </script>
+</body>
+</html>
